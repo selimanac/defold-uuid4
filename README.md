@@ -9,7 +9,7 @@ All credits goes to [Gregory void★ Pakosz](https://twitter.com/gpakosz)
 
 Open your game.project file and in [the dependencies field](http://www.defold.com/manuals/libraries/) under project add:
 
-	https://github.com/selimanac/defold-random/archive/master.zip
+	https://github.com/selimanac/defold-uuid4/archive/master.zip
 	
 ---
 
