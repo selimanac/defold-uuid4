@@ -9,8 +9,8 @@ width = 960
 height = 640
 
 [project]
-title = myextension
+title = uuid4
 
 [library]
-include_dirs = myextension
+include_dirs = uuid4
 
