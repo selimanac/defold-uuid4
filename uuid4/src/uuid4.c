@@ -142,10 +142,79 @@ void UUID4_PREFIX(seed)(uint64_t* state)
   *state = *state * 6364136223846793005u + (uintptr_t)UUID4_PREFIX(gen);
 }
 
+#elif defined(__EMSCRIPTEN__)
+
+#ifdef __cplusplus
+} // end of extern "C"
+#endif
+
+#include <emscripten/emscripten.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <ctime>
+#include <cstdlib>
+
+UUID4_FUNCSPEC
+void UUID4_PREFIX(seed)(uint64_t* state)
+{
+    static uint64_t state0 = 0;
+
+    //Returns the highest-precision representation of the current time that the browser provides.
+    //This uses either Date.now or performance.now. The result is not an absolute time, and is only meaningful in comparison to other calls to this function.
+    double now = emscripten_get_now();
+    uint64_t time_component = (uint64_t)now;
+
+    // Initialize a random component based on current time
+    srand((unsigned)time(NULL));
+    uint64_t random_component = (uint64_t)rand();
+
+    // Use the address of a local volatile variable as a platform-specific value
+    volatile int local_variable;
+    uint64_t platform_value = (uint64_t)(&local_variable);
+
+    // Start combining the components to form the initial state
+    *state = state0++ + time_component;
+
+    // Mix in the random and platform-specific components using hash and mix functions
+    *state = *state * 6364136223846793005u + UUID4_PREFIX(mix)(UUID4_PREFIX(hash)((uint32_t)random_component), UUID4_PREFIX(hash)((uint32_t)platform_value));
+
+    // Further mix the state with the platform-specific value for additional uniqueness
+    *state = *state * 6364136223846793005u + platform_value;
+}
+
 #else
+#include <stdlib.h>
+#include <time.h>
 
-#error unsupported platform
+UUID4_FUNCSPEC
+void UUID4_PREFIX(seed)(uint64_t* state)
+{
+    static uint64_t state0 = 0;
 
+    // Get current time in seconds since the Unix epoch
+    time_t now = time(NULL);
+    uint64_t time_component = (uint64_t)now;
+
+    // Initialize a random component
+    srand((unsigned)now); // Use the current time to seed the random number generator
+    uint64_t random_component = (uint64_t)rand();
+
+    // Use the address of a local volatile variable as a platform-specific value
+    volatile int local_variable;
+    uint64_t platform_value = (uint64_t)(&local_variable);
+
+    // Start combining the components to form the initial state
+    *state = state0++ + time_component;
+
+    // Mix in the random and platform-specific components
+    *state = *state * 6364136223846793005u + UUID4_PREFIX(mix)(UUID4_PREFIX(hash)((uint32_t)random_component), UUID4_PREFIX(hash)((uint32_t)platform_value));
+
+    // Further mix the state with the platform-specific value for additional uniqueness
+    *state = *state * 6364136223846793005u + platform_value;
+}
 #endif
 
 #include <stdio.h>
