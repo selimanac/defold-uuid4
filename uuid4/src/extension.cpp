@@ -8,29 +8,31 @@
 #include <uuid4.h>
 
 UUID4_STATE_T state;
-UUID4_T uuid;
 
-static int generate(lua_State *L)
+static int    generate(lua_State* L)
 {
+    UUID4_T uuid;
     uuid4_gen(&state, &uuid);
     char buffer[UUID4_STR_BUFFER_SIZE];
     if (!uuid4_to_s(uuid, buffer, sizeof(buffer)))
     {
+        DM_LUA_STACK_CHECK(L, 0);
         dmLogError("uuid4 error!");
         return 0;
     }
 
+    DM_LUA_STACK_CHECK(L, 1);
     lua_pushstring(L, buffer);
     return 1;
 }
 
 // Functions exposed to Lua
-static const luaL_reg Module_methods[] =
-    {
-        {"generate", generate},
-        {0, 0}};
+static const luaL_reg Module_methods[] = {
+    { "generate", generate },
+    { 0, 0 }
+};
 
-static void LuaInit(lua_State *L)
+static void LuaInit(lua_State* L)
 {
     int top = lua_gettop(L);
 
@@ -41,13 +43,13 @@ static void LuaInit(lua_State *L)
     assert(top == lua_gettop(L));
 }
 
-dmExtension::Result AppInitializeuuid4(dmExtension::AppParams *params)
+dmExtension::Result AppInitializeuuid4(dmExtension::AppParams* params)
 {
     dmLogInfo("AppInitializeuuid4\n");
     return dmExtension::RESULT_OK;
 }
 
-dmExtension::Result Initializeuuid4(dmExtension::Params *params)
+dmExtension::Result Initializeuuid4(dmExtension::Params* params)
 {
     // Init Lua
     LuaInit(params->m_L);

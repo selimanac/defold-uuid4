@@ -4,9 +4,9 @@
 // https://github.com/gpakosz/uuid4
 
 #if defined(__linux__)
-  #if !defined(_GNU_SOURCE)
-    #define _GNU_SOURCE
-  #endif
+#if !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
 #endif
 
 // in case you want to #include "uuid4.c" in a larger compilation unit
@@ -20,81 +20,80 @@
 #endif
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
+    // —————————————————————————————————————————————————————————————————————————————
 
-// —————————————————————————————————————————————————————————————————————————————
+    // http://xoshiro.di.unimi.it/splitmix64.c
+    // Written in 2015 by Sebastiano Vigna (vigna@acm.org)
+    /*
+       This is a fixed-increment version of Java 8's SplittableRandom generator
+       See http://dx.doi.org/10.1145/2714064.2660195 and
+       http://docs.oracle.com/javase/8/docs/api/java/util/SplittableRandom.html
 
-// http://xoshiro.di.unimi.it/splitmix64.c
-// Written in 2015 by Sebastiano Vigna (vigna@acm.org)
-/*
-   This is a fixed-increment version of Java 8's SplittableRandom generator
-   See http://dx.doi.org/10.1145/2714064.2660195 and
-   http://docs.oracle.com/javase/8/docs/api/java/util/SplittableRandom.html
+       It is a very fast generator passing BigCrush.
+    */
+    static inline uint64_t UUID4_PREFIX(splitmix64)(uint64_t* state)
+    {
+        uint64_t z = (*state += 0x9E3779B97F4A7C15u);
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9u;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBu;
+        return z ^ (z >> 31);
+    }
 
-   It is a very fast generator passing BigCrush.
-*/
-static inline uint64_t UUID4_PREFIX(splitmix64)(uint64_t* state)
-{
-  uint64_t z = (*state += 0x9E3779B97F4A7C15u);
-  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9u;
-  z = (z ^ (z >> 27)) * 0x94D049BB133111EBu;
-  return z ^ (z >> 31);
-}
+    // http://www.pcg-random.org/posts/developing-a-seed_seq-alternative.html
+    // Written in 2015 by Melissa O'Neil (oneill@pcg-random.org)
+    static inline uint32_t UUID4_PREFIX(hash)(uint32_t value)
+    {
+        static uint32_t multiplier = 0x43b0d7e5u;
 
-// http://www.pcg-random.org/posts/developing-a-seed_seq-alternative.html
-// Written in 2015 by Melissa O'Neil (oneill@pcg-random.org)
-static inline uint32_t UUID4_PREFIX(hash)(uint32_t value)
-{
-  static uint32_t multiplier = 0x43b0d7e5u;
+        value ^= multiplier;
+        multiplier *= 0x931e8875u;
+        value *= multiplier;
+        value ^= value >> 16;
 
-  value ^= multiplier;
-  multiplier *= 0x931e8875u;
-  value *= multiplier;
-  value ^= value >> 16;
+        return value;
+    }
 
-  return value;
-}
+    static inline uint32_t UUID4_PREFIX(mix)(uint32_t x, uint32_t y)
+    {
+        uint32_t result = 0xca01f9ddu * x - 0x4973f715u * y;
+        result ^= result >> 16;
+        return result;
+    }
 
-static inline uint32_t UUID4_PREFIX(mix)(uint32_t x, uint32_t y)
-{
-  uint32_t result = 0xca01f9ddu * x - 0x4973f715u * y;
-  result ^= result >> 16;
-  return result;
-}
-
-
-// —————————————————————————————————————————————————————————————————————————————
+    // —————————————————————————————————————————————————————————————————————————————
 
 #if defined(_WIN32)
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-UUID4_FUNCSPEC
-void UUID4_PREFIX(seed)(uint64_t* state)
-{
-  static uint64_t state0 = 0;
+    UUID4_FUNCSPEC
+    void UUID4_PREFIX(seed)(uint64_t* state)
+    {
+        static uint64_t state0 = 0;
 
-  LARGE_INTEGER time;
-  BOOL ok = QueryPerformanceCounter(&time);
-  UUID4_ASSERT(ok);
+        LARGE_INTEGER   time;
+        BOOL            ok = QueryPerformanceCounter(&time);
+        UUID4_ASSERT(ok);
 
-  *state = state0++ + ((uintptr_t)&time ^ (uint64_t)time.QuadPart);
+        *state = state0++ + ((uintptr_t)&time ^ (uint64_t)time.QuadPart);
 
-  uint32_t pid = (uint32_t)GetCurrentProcessId();
-  uint32_t tid = (uint32_t)GetCurrentThreadId();
+        uint32_t pid = (uint32_t)GetCurrentProcessId();
+        uint32_t tid = (uint32_t)GetCurrentThreadId();
 
-  *state = *state * 6364136223846793005u + ((uint64_t)(UUID4_PREFIX(mix)(UUID4_PREFIX(hash)(pid), UUID4_PREFIX(hash)(tid))) << 32);
-  *state = *state * 6364136223846793005u + (uintptr_t)GetCurrentProcessId;
-  *state = *state * 6364136223846793005u + (uintptr_t)UUID4_PREFIX(gen);
-}
+        *state = *state * 6364136223846793005u + ((uint64_t)(UUID4_PREFIX(mix)(UUID4_PREFIX(hash)(pid), UUID4_PREFIX(hash)(tid))) << 32);
+        *state = *state * 6364136223846793005u + (uintptr_t)GetCurrentProcessId;
+        *state = *state * 6364136223846793005u + (uintptr_t)UUID4_PREFIX(gen);
+    }
 
 #elif defined(__linux__)
 
 #if !defined(UUID4_CLOCK_ID)
-  #define UUID4_CLOCK_ID CLOCK_MONOTONIC_RAW
+#define UUID4_CLOCK_ID CLOCK_MONOTONIC_RAW
 #endif
 
 #include <time.h>
@@ -104,19 +103,19 @@ void UUID4_PREFIX(seed)(uint64_t* state)
 UUID4_FUNCSPEC
 void UUID4_PREFIX(seed)(uint64_t* state)
 {
-  static uint64_t state0 = 0;
+    static uint64_t state0 = 0;
 
-  struct timespec time;
-  bool ok = clock_gettime(UUID4_CLOCK_ID, &time) == 0;
-  UUID4_ASSERT(ok);
+    struct timespec time;
+    bool            ok = clock_gettime(UUID4_CLOCK_ID, &time) == 0;
+    UUID4_ASSERT(ok);
 
-  *state = state0++ + ((uintptr_t)&time ^ (uint64_t)(time.tv_sec * 1000000000 + time.tv_nsec));
+    *state = state0++ + ((uintptr_t)&time ^ (uint64_t)(time.tv_sec * 1000000000 + time.tv_nsec));
 
-  uint32_t pid = (uint32_t)getpid();
-  uint32_t tid = (uint32_t)syscall(SYS_gettid);
-  *state = *state * 6364136223846793005u + ((uint64_t)(UUID4_PREFIX(mix)(UUID4_PREFIX(hash)(pid), UUID4_PREFIX(hash)(tid))) << 32);
-  *state = *state * 6364136223846793005u + (uintptr_t)getpid;
-  *state = *state * 6364136223846793005u + (uintptr_t)UUID4_PREFIX(gen);
+    uint32_t pid = (uint32_t)getpid();
+    uint32_t tid = (uint32_t)syscall(SYS_gettid);
+    *state = *state * 6364136223846793005u + ((uint64_t)(UUID4_PREFIX(mix)(UUID4_PREFIX(hash)(pid), UUID4_PREFIX(hash)(tid))) << 32);
+    *state = *state * 6364136223846793005u + (uintptr_t)getpid;
+    *state = *state * 6364136223846793005u + (uintptr_t)UUID4_PREFIX(gen);
 }
 
 #elif defined(__APPLE__)
@@ -128,18 +127,18 @@ void UUID4_PREFIX(seed)(uint64_t* state)
 UUID4_FUNCSPEC
 void UUID4_PREFIX(seed)(uint64_t* state)
 {
-  static uint64_t state0 = 0;
+    static uint64_t state0 = 0;
 
-  uint64_t time = mach_absolute_time();
+    uint64_t        time = mach_absolute_time();
 
-  *state = state0++ + time;
+    *state = state0++ + time;
 
-  uint32_t pid = (uint32_t)getpid();
-  uint64_t tid;
-  pthread_threadid_np(NULL, &tid);
-  *state = *state * 6364136223846793005u + ((uint64_t)(UUID4_PREFIX(mix)(UUID4_PREFIX(hash)(pid), UUID4_PREFIX(hash)((uint32_t)tid))) << 32);
-  *state = *state * 6364136223846793005u + (uintptr_t)getpid;
-  *state = *state * 6364136223846793005u + (uintptr_t)UUID4_PREFIX(gen);
+    uint32_t pid = (uint32_t)getpid();
+    uint64_t tid;
+    pthread_threadid_np(NULL, &tid);
+    *state = *state * 6364136223846793005u + ((uint64_t)(UUID4_PREFIX(mix)(UUID4_PREFIX(hash)(pid), UUID4_PREFIX(hash)((uint32_t)tid))) << 32);
+    *state = *state * 6364136223846793005u + (uintptr_t)getpid;
+    *state = *state * 6364136223846793005u + (uintptr_t)UUID4_PREFIX(gen);
 }
 
 #elif defined(__EMSCRIPTEN__)
@@ -151,39 +150,40 @@ void UUID4_PREFIX(seed)(uint64_t* state)
 #include <emscripten/emscripten.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <ctime>
 #include <cstdlib>
 
-UUID4_FUNCSPEC
-void UUID4_PREFIX(seed)(uint64_t* state)
-{
-    static uint64_t state0 = 0;
+    UUID4_FUNCSPEC
+    void UUID4_PREFIX(seed)(uint64_t* state)
+    {
+        static uint64_t state0 = 0;
 
-    //Returns the highest-precision representation of the current time that the browser provides.
-    //This uses either Date.now or performance.now. The result is not an absolute time, and is only meaningful in comparison to other calls to this function.
-    double now = emscripten_get_now();
-    uint64_t time_component = (uint64_t)now;
+        // Returns the highest-precision representation of the current time that the browser provides.
+        // This uses either Date.now or performance.now. The result is not an absolute time, and is only meaningful in comparison to other calls to this function.
+        double   now = emscripten_get_now();
+        uint64_t time_component = (uint64_t)now;
 
-    // Initialize a random component based on current time
-    srand((unsigned)time(NULL));
-    uint64_t random_component = (uint64_t)rand();
+        // Initialize a random component based on current time
+        srand((unsigned)time(NULL));
+        uint64_t random_component = (uint64_t)rand();
 
-    // Use the address of a local volatile variable as a platform-specific value
-    volatile int local_variable;
-    uint64_t platform_value = (uint64_t)(&local_variable);
+        // Use the address of a local volatile variable as a platform-specific value
+        volatile int local_variable;
+        uint64_t     platform_value = (uint64_t)(&local_variable);
 
-    // Start combining the components to form the initial state
-    *state = state0++ + time_component;
+        // Start combining the components to form the initial state
+        *state = state0++ + time_component;
 
-    // Mix in the random and platform-specific components using hash and mix functions
-    *state = *state * 6364136223846793005u + UUID4_PREFIX(mix)(UUID4_PREFIX(hash)((uint32_t)random_component), UUID4_PREFIX(hash)((uint32_t)platform_value));
+        // Mix in the random and platform-specific components using hash and mix functions
+        *state = *state * 6364136223846793005u + UUID4_PREFIX(mix)(UUID4_PREFIX(hash)((uint32_t)random_component), UUID4_PREFIX(hash)((uint32_t)platform_value));
 
-    // Further mix the state with the platform-specific value for additional uniqueness
-    *state = *state * 6364136223846793005u + platform_value;
-}
+        // Further mix the state with the platform-specific value for additional uniqueness
+        *state = *state * 6364136223846793005u + platform_value;
+    }
 
 #else
 #include <stdlib.h>
@@ -195,7 +195,7 @@ void UUID4_PREFIX(seed)(uint64_t* state)
     static uint64_t state0 = 0;
 
     // Get current time in seconds since the Unix epoch
-    time_t now = time(NULL);
+    time_t   now = time(NULL);
     uint64_t time_component = (uint64_t)now;
 
     // Initialize a random component
@@ -204,7 +204,7 @@ void UUID4_PREFIX(seed)(uint64_t* state)
 
     // Use the address of a local volatile variable as a platform-specific value
     volatile int local_variable;
-    uint64_t platform_value = (uint64_t)(&local_variable);
+    uint64_t     platform_value = (uint64_t)(&local_variable);
 
     // Start combining the components to form the initial state
     *state = state0++ + time_component;
@@ -220,51 +220,51 @@ void UUID4_PREFIX(seed)(uint64_t* state)
 #include <stdio.h>
 #include <inttypes.h>
 
-static void UUID4_PREFIX(randomize)(UUID4_STATE_T* state, UUID4_T* out)
-{
-  out->qwords[0] = UUID4_PREFIX(splitmix64)(state);
-  out->qwords[1] = UUID4_PREFIX(splitmix64)(state);
-}
-
-UUID4_FUNCSPEC
-void UUID4_PREFIX(gen)(UUID4_STATE_T* state, UUID4_T* out)
-{
-  UUID4_PREFIX(randomize)(state, out);
-
-  out->bytes[6] = (out->bytes[6] & 0xf) | 0x40;
-  out->bytes[8] = (out->bytes[8] & 0x3f) | 0x80;
-}
-
-UUID4_FUNCSPEC
-bool UUID4_PREFIX(to_s)(const UUID4_T uuid, char* out, int capacity)
-{
-  static const char hex[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-  static const int groups[] = { 8, 4, 4, 4, 12 };
-  int b = 0;
-
-  if (capacity < UUID4_STR_BUFFER_SIZE)
-    return false;
-
-  for (int i = 0; i < (int)(sizeof(groups) / sizeof(groups[0])); ++i)
-  {
-    for (int j = 0; j < groups[i]; j += 2)
+    static void UUID4_PREFIX(randomize)(UUID4_STATE_T* state, UUID4_T* out)
     {
-      uint8_t byte = uuid.bytes[b++];
-
-      *out++ = hex[byte >> 4];
-      *out++ = hex[byte & 0xf];
+        out->qwords[0] = UUID4_PREFIX(splitmix64)(state);
+        out->qwords[1] = UUID4_PREFIX(splitmix64)(state);
     }
-    *out++ = '-';
-  }
 
-  *--out = 0;
+    UUID4_FUNCSPEC
+    void UUID4_PREFIX(gen)(UUID4_STATE_T* state, UUID4_T* out)
+    {
+        UUID4_PREFIX(randomize)(state, out);
 
-  return true;
-}
+        out->bytes[6] = (out->bytes[6] & 0xf) | 0x40;
+        out->bytes[8] = (out->bytes[8] & 0x3f) | 0x80;
+    }
 
-#if defined (UUID4_PRACTRAND_TEST)
+    UUID4_FUNCSPEC
+    bool UUID4_PREFIX(to_s)(const UUID4_T uuid, char* out, int capacity)
+    {
+        static const char hex[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+        static const int  groups[] = { 8, 4, 4, 4, 12 };
+        int               b = 0;
 
-// $ gcc -O2 -Wall -Werror -DUUID4_PRACTPRAND_TEST -o uuid4_practrand_test uuid.c
+        if (capacity < UUID4_STR_BUFFER_SIZE)
+            return false;
+
+        for (int i = 0; i < (int)(sizeof(groups) / sizeof(groups[0])); ++i)
+        {
+            for (int j = 0; j < groups[i]; j += 2)
+            {
+                uint8_t byte = uuid.bytes[b++];
+
+                *out++ = hex[byte >> 4];
+                *out++ = hex[byte & 0xf];
+            }
+            *out++ = '-';
+        }
+
+        *--out = 0;
+
+        return true;
+    }
+
+#if defined(UUID4_PRACTRAND_TEST)
+
+    // $ gcc -O2 -Wall -Werror -DUUID4_PRACTPRAND_TEST -o uuid4_practrand_test uuid.c
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -276,32 +276,32 @@ bool UUID4_PREFIX(to_s)(const UUID4_T uuid, char* out, int capacity)
 #include <unistd.h>
 #endif
 
-int main()
-{
-  if (isatty(fileno(stdout)))
-  {
-    fprintf(stderr, "usage: uuid4_practrand_test | RNG_test stdin64\n");
-    exit(EXIT_FAILURE);
-  }
+    int main()
+    {
+        if (isatty(fileno(stdout)))
+        {
+            fprintf(stderr, "usage: uuid4_practrand_test | RNG_test stdin64\n");
+            exit(EXIT_FAILURE);
+        }
 
 #ifdef _WIN32
-  _setmode(fileno(stdout), _O_BINARY);
+        _setmode(fileno(stdout), _O_BINARY);
 #endif
 
-  UUID4_STATE_T state;
-  UUID4_PREFIX(seed)(&state);
+        UUID4_STATE_T state;
+        UUID4_PREFIX(seed)(&state);
 
-  while (true)
-  {
-    UUID4_T uuid[1024];
-    for (size_t i = 0; i < sizeof(uuid) / sizeof(uuid[0]); ++i)
-      UUID4_PREFIX(randomize)(&state, &uuid[i]);
+        while (true)
+        {
+            UUID4_T uuid[1024];
+            for (size_t i = 0; i < sizeof(uuid) / sizeof(uuid[0]); ++i)
+                UUID4_PREFIX(randomize)(&state, &uuid[i]);
 
-    fwrite(uuid, sizeof(uuid), 1, stdout);
-  }
+            fwrite(uuid, sizeof(uuid), 1, stdout);
+        }
 
-  return 0;
-}
+        return 0;
+    }
 
 #elif defined(UUID4_TESTU01_TEST)
 
@@ -310,114 +310,110 @@ int main()
 
 static inline uint32_t rev32(uint32_t v)
 {
-  // https://graphics.stanford.edu/~seander/bithacks.html
-  // swap odd and even bits
-  v = ((v >> 1) & 0x55555555) | ((v & 0x55555555) << 1);
-  // swap consecutive pairs
-  v = ((v >> 2) & 0x33333333) | ((v & 0x33333333) << 2);
-  // swap nibbles ...
-  v = ((v >> 4) & 0x0F0F0F0F) | ((v & 0x0F0F0F0F) << 4);
-  // swap bytes
-  v = ((v >> 8) & 0x00FF00FF) | ((v & 0x00FF00FF) << 8);
-  // swap 2-byte-long pairs
-  v = ( v >> 16             ) | ( v               << 16);
-  return v;
+    // https://graphics.stanford.edu/~seander/bithacks.html
+    // swap odd and even bits
+    v = ((v >> 1) & 0x55555555) | ((v & 0x55555555) << 1);
+    // swap consecutive pairs
+    v = ((v >> 2) & 0x33333333) | ((v & 0x33333333) << 2);
+    // swap nibbles ...
+    v = ((v >> 4) & 0x0F0F0F0F) | ((v & 0x0F0F0F0F) << 4);
+    // swap bytes
+    v = ((v >> 8) & 0x00FF00FF) | ((v & 0x00FF00FF) << 8);
+    // swap 2-byte-long pairs
+    v = (v >> 16) | (v << 16);
+    return v;
 }
 
 static UUID4_STATE_T state;
 
-static unsigned int gen_uuid_0()
+static unsigned int  gen_uuid_0()
 {
-  UUID4_T uuid;
-  UUID4_PREFIX(randomize)(&state, &uuid);
+    UUID4_T uuid;
+    UUID4_PREFIX(randomize)(&state, &uuid);
 
-  return uuid.dwords[0];
+    return uuid.dwords[0];
 }
 
 static unsigned int gen_uuid_0_rev()
 {
-  return rev32(gen_uuid_0());
+    return rev32(gen_uuid_0());
 }
 
 static unsigned int gen_uuid_1()
 {
-  UUID4_T uuid;
-  UUID4_PREFIX(randomize)(&state, &uuid);
+    UUID4_T uuid;
+    UUID4_PREFIX(randomize)(&state, &uuid);
 
-  return uuid.dwords[1];
+    return uuid.dwords[1];
 }
 
 static unsigned int gen_uuid_1_rev()
 {
-  return rev32(gen_uuid_1());
+    return rev32(gen_uuid_1());
 }
 
 static unsigned int gen_uuid_2()
 {
-  UUID4_T uuid;
-  UUID4_PREFIX(randomize)(&state, &uuid);
+    UUID4_T uuid;
+    UUID4_PREFIX(randomize)(&state, &uuid);
 
-  return uuid.dwords[2];
+    return uuid.dwords[2];
 }
 
 static unsigned int gen_uuid_2_rev()
 {
-  return rev32(gen_uuid_2());
+    return rev32(gen_uuid_2());
 }
 
 static unsigned int gen_uuid_3()
 {
-  UUID4_T uuid;
-  UUID4_PREFIX(randomize)(&state, &uuid);
+    UUID4_T uuid;
+    UUID4_PREFIX(randomize)(&state, &uuid);
 
-  return uuid.dwords[3];
+    return uuid.dwords[3];
 }
 
 static unsigned int gen_uuid_3_rev()
 {
-  return rev32(gen_uuid_3());
+    return rev32(gen_uuid_3());
 }
 
 int main(int argc, char* argv[])
 {
-  swrite_Basic = FALSE;
+    swrite_Basic = FALSE;
 
-  UUID4_PREFIX(seed)(&state);
+    UUID4_PREFIX(seed)(&state);
 
-  struct
-  {
-    const char* name;
-    unsigned int (*gen)();
-  } gens[] =
-  {
-    {"uuid4.dwords[0]", gen_uuid_0}, {"uuid4.dwords[0] (reversed)", gen_uuid_0_rev},
-    {"uuid4.dwords[1]", gen_uuid_1}, {"uuid4.dwords[1] (reversed)", gen_uuid_1_rev},
-    {"uuid4.dwords[2]", gen_uuid_2}, {"uuid4.dwords[2] (reversed)", gen_uuid_2_rev},
-    {"uuid4.dwords[3]", gen_uuid_3}, {"uuid4.dwords[3] (reversed)", gen_uuid_3_rev}
-  };
+    struct
+    {
+        const char* name;
+        unsigned int (*gen)();
+    } gens[] = {
+        { "uuid4.dwords[0]", gen_uuid_0 }, { "uuid4.dwords[0] (reversed)", gen_uuid_0_rev }, { "uuid4.dwords[1]", gen_uuid_1 }, { "uuid4.dwords[1] (reversed)", gen_uuid_1_rev }, { "uuid4.dwords[2]", gen_uuid_2 }, { "uuid4.dwords[2] (reversed)", gen_uuid_2_rev }, { "uuid4.dwords[3]", gen_uuid_3 }, { "uuid4.dwords[3] (reversed)", gen_uuid_3_rev }
+    };
 
-  for (size_t i = 0; i < sizeof(gens) / sizeof(gens[0]); ++i)
-  {
-    unif01_Gen* gen = unif01_CreateExternGenBits((char*)gens[i].name, gens[i].gen);
-    bbattery_SmallCrush(gen);
-    unif01_DeleteExternGenBits(gen);
-  }
+    for (size_t i = 0; i < sizeof(gens) / sizeof(gens[0]); ++i)
+    {
+        unif01_Gen* gen = unif01_CreateExternGenBits((char*)gens[i].name, gens[i].gen);
+        bbattery_SmallCrush(gen);
+        unif01_DeleteExternGenBits(gen);
+    }
 
-  for (size_t i = 0; i < sizeof(gens) / sizeof(gens[0]); ++i)
-  {
-    unif01_Gen* gen = unif01_CreateExternGenBits((char*)gens[i].name, gens[i].gen);
-    bbattery_Crush(gen);
-    unif01_DeleteExternGenBits(gen);
-  }
+    for (size_t i = 0; i < sizeof(gens) / sizeof(gens[0]); ++i)
+    {
+        unif01_Gen* gen = unif01_CreateExternGenBits((char*)gens[i].name, gens[i].gen);
+        bbattery_Crush(gen);
+        unif01_DeleteExternGenBits(gen);
+    }
 
-  for (size_t i = 0; i < sizeof(gens) / sizeof(gens[0]); ++i)
-  {
-    unif01_Gen* gen = unif01_CreateExternGenBits((char*)gens[i].name, gens[i].gen);
-    bbattery_BigCrush(gen);
-    unif01_DeleteExternGenBits(gen);
-  }
+    for (size_t i = 0; i < sizeof(gens) / sizeof(gens[0]); ++i)
+    {
+        unif01_Gen* gen = unif01_CreateExternGenBits((char*)gens[i].name, gens[i].gen);
+        bbattery_BigCrush(gen);
+        unif01_DeleteExternGenBits(gen);
+    }
 
-  return 0;
+    return 0;
 }
 
 #endif
